@@ -1,18 +1,24 @@
 // ─── Sensor & Hardware (contrato real da API) ────────────────────────────────
 
-/** Tipos de medida suportados pelo backend */
-export type MeasurementType = 'TEMPERATURE' | 'SOIL_MOISTURE' | 'AIR_QUALITY';
-
 export type DeviceStatus = 'online' | 'offline' | 'error';
 export type PlantStatus  = 'healthy' | 'warning' | 'critical';
 
-/** Sensor como vindo da API */
+/** Template de sensor vindo de GET /sensors/templates/ */
+export interface SensorTemplate {
+  id: number;
+  name: string;
+  model: string;
+  capabilities: string[];
+  defaultParameters: Record<string, string>;
+}
+
+/** Sensor como vindo da API (GET /sensors/?deviceId=) */
 export interface ApiSensor {
   id: number;
   deviceId: number;
   sensorName: string;
   model: string;
-  capabilities: string[];   // ex: ["TEMPERATURE", "AIR_QUALITY"]
+  capabilities: string[];
   isWorking: boolean;
   parameters: Record<string, string>;
 }
@@ -20,10 +26,12 @@ export interface ApiSensor {
 /** Sensor no formato interno do frontend */
 export interface Sensor {
   id: number;
+  deviceId: number;
   name: string;
   model: string;
-  capabilities: MeasurementType[];
+  capabilities: string[];
   isWorking: boolean;
+  parameters: Record<string, string>;
 }
 
 export interface Hardware {
@@ -38,6 +46,8 @@ export interface Hardware {
 
 // ─── Plant ───────────────────────────────────────────────────────────────────
 
+export type MeasurementType = 'TEMPERATURE' | 'SOIL_MOISTURE' | 'AIR_QUALITY';
+
 export interface PlantSettings {
   humidity: { min: number; max: number; alert: boolean };
   temp:     { min: number; max: number; alert: boolean };
@@ -45,10 +55,6 @@ export interface PlantSettings {
   light:    { min: number; max: number; alert: boolean };
 }
 
-/**
- * Mapeamento de medidas → sensor escolhido.
- * Chave = MeasurementType, valor = sensorId ou null (não monitorado).
- */
 export type MeasurementsMapping = Partial<Record<MeasurementType, number | null>>;
 
 export interface Plant {
@@ -118,12 +124,6 @@ export interface AddHardwareFormProps {
   onSave: (data: Hardware) => void;
   onCancel: () => void;
   initialData?: Hardware | null;
-}
-
-export interface SettingsViewProps {
-  hardwareList: Hardware[];
-  onAddHardware:  (hardware: Hardware) => void;
-  onEditHardware: (hardware: Hardware) => void;
 }
 
 export interface ReportsViewProps {
