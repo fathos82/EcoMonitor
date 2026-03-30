@@ -1,33 +1,29 @@
-export type SensorType = 'dht' | 'soil_analog' | 'soil_digital' | 'relay' | 'ultrasonic' | 'i2c_env' | 'generic' | 'camera';
-export type PinType = 'digital' | 'analog' | 'i2c' | 'string';
+// ─── Sensor & Hardware (contrato real da API) ────────────────────────────────
+
+/** Tipos de medida suportados pelo backend */
+export type MeasurementType = 'TEMPERATURE' | 'SOIL_MOISTURE' | 'AIR_QUALITY';
+
 export type DeviceStatus = 'online' | 'offline' | 'error';
-export type SensorStatus = 'ok' | 'error' | 'unknown';
-export type PlantStatus = 'healthy' | 'warning' | 'critical';
+export type PlantStatus  = 'healthy' | 'warning' | 'critical';
 
-export interface Pin {
-  key: string;
-  label: string;
-  type: PinType;
+/** Sensor como vindo da API */
+export interface ApiSensor {
+  id: number;
+  deviceId: number;
+  sensorName: string;
+  model: string;
+  capabilities: string[];   // ex: ["TEMPERATURE", "AIR_QUALITY"]
+  isWorking: boolean;
+  parameters: Record<string, string>;
 }
 
-export interface SensorTemplate {
-  label: string;
-  defaultUnit: string;
-  pins: Pin[];
-}
-
-export interface SensorConfig {
-  [key: string]: string;
-}
-
+/** Sensor no formato interno do frontend */
 export interface Sensor {
   id: number;
   name: string;
-  type: SensorType;
-  config: SensorConfig;
-  status: SensorStatus;
-  lastRead: string;
-  errorMessage?: string;
+  model: string;
+  capabilities: MeasurementType[];
+  isWorking: boolean;
 }
 
 export interface Hardware {
@@ -40,12 +36,20 @@ export interface Hardware {
   sensors: Sensor[];
 }
 
+// ─── Plant ───────────────────────────────────────────────────────────────────
+
 export interface PlantSettings {
   humidity: { min: number; max: number; alert: boolean };
-  temp: { min: number; max: number; alert: boolean };
-  air: { min: number; max: number; alert: boolean };
-  light: { min: number; max: number; alert: boolean };
+  temp:     { min: number; max: number; alert: boolean };
+  air:      { min: number; max: number; alert: boolean };
+  light:    { min: number; max: number; alert: boolean };
 }
+
+/**
+ * Mapeamento de medidas → sensor escolhido.
+ * Chave = MeasurementType, valor = sensorId ou null (não monitorado).
+ */
+export type MeasurementsMapping = Partial<Record<MeasurementType, number | null>>;
 
 export interface Plant {
   id: number;
@@ -56,23 +60,27 @@ export interface Plant {
   lastHumidity: number;
   location: string;
   hardwareId: number;
-  sensorsMapping: {
-    soil: number | null;
-    env: number | null;
-    light: number | null;
-  };
+  /** @deprecated substituído por measurementsMapping */
+  sensorsMapping: { soil: number | null; env: number | null; light: number | null };
+  measurementsMapping: MeasurementsMapping;
   settings: PlantSettings;
 }
+
+// ─── Charts ──────────────────────────────────────────────────────────────────
 
 export interface DataPoint {
   time: number;
   [key: string]: number;
 }
 
+// ─── User ────────────────────────────────────────────────────────────────────
+
 export interface User {
   name: string;
   email: string;
 }
+
+// ─── Component props ─────────────────────────────────────────────────────────
 
 export interface StatBoxProps {
   label: string;
@@ -94,7 +102,7 @@ export interface SensorCardProps {
 export interface PlantSummaryCardProps {
   plant: Plant;
   onClick: (plant: Plant) => void;
-  onEdit: (plant: Plant) => void;
+  onEdit:  (plant: Plant) => void;
   onDelete: (id: number) => void;
 }
 
@@ -106,12 +114,6 @@ export interface ActionButtonProps {
   color: string;
 }
 
-export interface SensorConfigCardProps {
-  sensor: Sensor;
-  onChange: (sensor: Sensor) => void;
-  onDelete: () => void;
-}
-
 export interface AddHardwareFormProps {
   onSave: (data: Hardware) => void;
   onCancel: () => void;
@@ -120,7 +122,7 @@ export interface AddHardwareFormProps {
 
 export interface SettingsViewProps {
   hardwareList: Hardware[];
-  onAddHardware: (hardware: Hardware) => void;
+  onAddHardware:  (hardware: Hardware) => void;
   onEditHardware: (hardware: Hardware) => void;
 }
 
