@@ -46,16 +46,22 @@ export interface Hardware {
 
 // ─── Plant ───────────────────────────────────────────────────────────────────
 
-export type MeasurementType = 'TEMPERATURE' | 'SOIL_MOISTURE' | 'AIR_QUALITY';
+export type MeasurementType = 'TEMPERATURE' | 'SOIL_MOISTURE' | 'AIR_QUALITY' | 'MOCK';
 
 export interface PlantSettings {
   humidity: { min: number; max: number; alert: boolean };
   temp:     { min: number; max: number; alert: boolean };
   air:      { min: number; max: number; alert: boolean };
   light:    { min: number; max: number; alert: boolean };
+  mock:      { min: number; max: number; alert: boolean };
 }
 
-export type MeasurementsMapping = Partial<Record<MeasurementType, number | null>>;
+export interface MeasurementEntry {
+  measurementId: number;
+  sensorId:      number;
+}
+
+export type MeasurementsMapping = Partial<Record<MeasurementType, MeasurementEntry | null>>;
 
 export interface Plant {
   id: number;
@@ -74,6 +80,8 @@ export interface Plant {
 
 // ─── Charts ──────────────────────────────────────────────────────────────────
 
+
+// todo: change to value
 export interface DataPoint {
   time: number;
   [key: string]: number;

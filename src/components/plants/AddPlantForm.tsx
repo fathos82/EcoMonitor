@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import {
   AlertCircle, ChevronLeft, ChevronDown,
   CircuitBoard, Droplets, Save, Tag,
-  Thermometer, Wind, Settings,
+  Thermometer, Wind, Settings, Cpu,
 } from 'lucide-react';
 import type {
   Hardware, MeasurementType, MeasurementsMapping,
   Plant, PlantSettings,
 } from '../../types';
+import { useSensors } from '../../hooks/useSensors';
 
 // ─── Tipos locais ─────────────────────────────────────────────────────────────
 
@@ -22,11 +23,13 @@ interface AddPlantFormProps {
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
+// TODO: Fazer isso escalaves pelo Backend.
 const DEFAULT_SETTINGS: PlantSettings = {
-  humidity: { min: 40,  max: 80,   alert: true  },
+  humidity: { min: 40,  max: 80,   alert: false  },
   temp:     { min: 18,  max: 28,   alert: false },
-  air:      { min: 0,   max: 50,   alert: true  },
+  air:      { min: 0,   max: 50,   alert: false  },
   light:    { min: 200, max: 1000, alert: false },
+  mock:    { min: 0, max: 50, alert: false },
 };
 
 const LOCATIONS = ['Jardim Externo', 'Estufa', 'Varanda', 'Sala de Estar', 'Cozinha', 'Escritório'];
@@ -47,6 +50,7 @@ const MEASUREMENT_CHANNELS: {
   { type: 'SOIL_MOISTURE', settingKey: 'humidity', label: 'Umidade do Solo',  unit: '%',   icon: Droplets,    iconColor: 'text-emerald-400', accentColor: 'text-blue-500'   },
   { type: 'TEMPERATURE',   settingKey: 'temp',     label: 'Temperatura',       unit: '°C',  icon: Thermometer, iconColor: 'text-orange-400',  accentColor: 'text-orange-500' },
   { type: 'AIR_QUALITY',   settingKey: 'air',      label: 'Qualidade do Ar',   unit: 'AQI', icon: Wind,        iconColor: 'text-blue-400',    accentColor: 'text-teal-500'   },
+  { type: 'MOCK',   settingKey: 'mock',      label: 'Sensor Mock',   unit: '°C', icon: Wind,        iconColor: 'text-blue-400',    accentColor: 'text-teal-500'   },
 ];
 
 // ─── Componente ───────────────────────────────────────────────────────────────
@@ -77,17 +81,37 @@ export const AddPlantForm: React.FC<AddPlantFormProps> = ({
       }
   );
 
+  // Sensor escolhido por medida: { SOIL_MOISTURE: sensorId | null, ... }
+  const [sensorSelection, setSensorSelection] = useState<Partial<Record<MeasurementType, number | null>>>(
+      () => {
+        if (initialData?.measurementsMapping) return { ...initialData.measurementsMapping };
+        return {};
+      }
+  );
+
   const selectedHardware = availableHardware.find((h) => h.id === formData.hardwareId);
+
+  // Busca sensores do device selecionado (query desabilitada se hardwareId === 0)
+  const { sensors, loading: loadingSensors } = useSensors(formData.hardwareId ?? 0);
+
+  /** Filtra sensores que suportam o MeasurementType */
+  const sensorsFor = (type: MeasurementType) =>
+      sensors.filter((s) => s.capabilities.includes(type));
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   const handleHardwareChange = (id: number) => {
     setFormData((prev) => ({ ...prev, hardwareId: id }));
-    setActiveMap({}); // limpa medidas ao trocar hardware
+    setActiveMap({});       // limpa medidas ao trocar hardware
+    setSensorSelection({}); // limpa seleção de sensores
   };
 
   const toggleMeasurement = (type: MeasurementType) => {
-    setActiveMap((prev) => ({ ...prev, [type]: !prev[type] }));
+    setActiveMap((prev) => {
+      const next = !prev[type];
+      if (!next) setSensorSelection((s) => ({ ...s, [type]: null })); // limpa sensor ao desativar
+      return { ...prev, [type]: next };
+    });
   };
 
   const handleSettingChange = (
@@ -109,12 +133,11 @@ export const AddPlantForm: React.FC<AddPlantFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Constrói o mapeamento final: medidas ativas ficam com null por enquanto
-    // (sensorId será associado na etapa de sensores)
+    // Constrói o mapeamento final com o sensorId selecionado para cada medida ativa
     const measurementsMapping: MeasurementsMapping = Object.fromEntries(
         MEASUREMENT_CHANNELS
             .filter(({ type }) => activeMap[type])
-            .map(({ type }) => [type, null])
+            .map(({ type }) => [type, sensorSelection[type] ?? null])
     );
 
     onSave({
@@ -233,33 +256,81 @@ export const AddPlantForm: React.FC<AddPlantFormProps> = ({
                   <p className="text-xs text-stone-400 mb-3">
                     Selecione o que deseja monitorar em <strong className="text-stone-200">{selectedHardware.name}</strong>:
                   </p>
+                  {/* Loading de sensores */}
+                  {loadingSensors && (
+                      <p className="text-xs text-stone-400 flex items-center gap-2">
+                        <span className="w-3 h-3 border border-stone-400 border-t-emerald-400 rounded-full animate-spin inline-block" />
+                        Carregando sensores…
+                      </p>
+                  )}
                   {MEASUREMENT_CHANNELS.map(({ type, label, unit, icon: Icon, iconColor }) => {
                     const active = !!activeMap[type];
+                    const compatible = sensorsFor(type);
                     return (
-                        <button
-                            key={type}
-                            type="button"
-                            onClick={() => toggleMeasurement(type)}
-                            className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
-                                active
-                                    ? 'bg-emerald-900/40 border-emerald-600/50'
-                                    : 'bg-stone-800/60 border-stone-700 hover:border-stone-500'
-                            }`}
-                        >
-                          <div className={`p-1.5 rounded-lg border shrink-0 ${
-                              active ? 'bg-emerald-800/50 border-emerald-600/50' : 'bg-stone-700 border-stone-600'
-                          } ${iconColor}`}>
-                            <Icon size={15} />
-                          </div>
-                          <div className="flex-1">
-                            <p className={`text-sm font-bold ${active ? 'text-white' : 'text-stone-400'}`}>{label}</p>
-                            <p className="text-[10px] text-stone-500">{unit}</p>
-                          </div>
-                          {/* Toggle visual */}
-                          <div className={`w-9 h-5 rounded-full transition-colors shrink-0 ${active ? 'bg-emerald-500' : 'bg-stone-600'}`}>
-                            <div className={`mt-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${active ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                          </div>
-                        </button>
+                        <div key={type} className="space-y-2">
+                          {/* Toggle da medida */}
+                          <button
+                              type="button"
+                              onClick={() => toggleMeasurement(type)}
+                              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
+                                  active
+                                      ? 'bg-emerald-900/40 border-emerald-600/50'
+                                      : 'bg-stone-800/60 border-stone-700 hover:border-stone-500'
+                              }`}
+                          >
+                            <div className={`p-1.5 rounded-lg border shrink-0 ${
+                                active ? 'bg-emerald-800/50 border-emerald-600/50' : 'bg-stone-700 border-stone-600'
+                            } ${iconColor}`}>
+                              <Icon size={15} />
+                            </div>
+                            <div className="flex-1">
+                              <p className={`text-sm font-bold ${active ? 'text-white' : 'text-stone-400'}`}>{label}</p>
+                              <p className="text-[10px] text-stone-500">{unit}</p>
+                            </div>
+                            {/* Toggle visual */}
+                            <div className={`w-9 h-5 rounded-full transition-colors shrink-0 ${active ? 'bg-emerald-500' : 'bg-stone-600'}`}>
+                              <div className={`mt-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${active ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                            </div>
+                          </button>
+
+                          {/* Seletor de sensor — aparece quando a medida está ativa */}
+                          {active && (
+                              <div className="ml-4 pl-3 border-l-2 border-emerald-700/50 animate-in slide-in-from-top duration-200">
+                                {compatible.length === 0 ? (
+                                    <p className="text-xs text-amber-400 flex items-center gap-1.5 py-1">
+                                      <AlertCircle size={12} />
+                                      Nenhum sensor compatível encontrado neste device.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] font-bold text-stone-400 uppercase tracking-wider flex items-center gap-1">
+                                        <Cpu size={10} /> Sensor
+                                      </label>
+                                      <div className="relative">
+                                        <select
+                                            className="w-full p-2 bg-stone-800 border border-stone-600 rounded-lg focus:border-emerald-500 outline-none text-white text-xs appearance-none cursor-pointer"
+                                            value={sensorSelection[type] ?? ''}
+                                            onChange={(e) =>
+                                                setSensorSelection((prev) => ({
+                                                  ...prev,
+                                                  [type]: e.target.value ? Number(e.target.value) : null,
+                                                }))
+                                            }
+                                        >
+                                          <option value="">Selecione o sensor…</option>
+                                          {compatible.map((s) => (
+                                              <option key={s.id} value={s.id}>
+                                                {s.name} — {s.model}
+                                              </option>
+                                          ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" size={12} />
+                                      </div>
+                                    </div>
+                                )}
+                              </div>
+                          )}
+                        </div>
                     );
                   })}
                 </div>

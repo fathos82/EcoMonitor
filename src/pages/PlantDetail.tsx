@@ -1,47 +1,44 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../stores/AppContext';
-import { usePlantData } from '../hooks/usePlantData';
+import { useTelemetry } from '../hooks/useTelemetry';
 import { PlantDetailView } from '../components/plants/PlantDetailView';
 
+// TODO: Fazer isso ser escalavel.
 export const PlantDetail: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { plants } = useAppStore();
-  const [timeRange, setTimeRange] = useState('24H');
-  
-  const plant = plants.find(p => p.id === Number(id));
-  const { soilData, airData, tempData, lightData, loading, loadPlantData } = usePlantData();
+    const { id }     = useParams<{ id: string }>();
+    const navigate   = useNavigate();
+    const { plants } = useAppStore();
+    const [timeRange, setTimeRange] = useState('24H');
 
-  useEffect(() => {
-    if (plant) {
-      loadPlantData(plant.id);
+    const plant = plants.find((p) => p.id === Number(id)) ?? null;
+    const { data, loading, connected, refresh } = useTelemetry(plant);
+
+    if (!plant) {
+        return (
+            <div className="text-center py-12">
+                <p className="text-stone-500">Planta não encontrada</p>
+                <button onClick={() => navigate('/')} className="mt-4 text-emerald-600 hover:underline">
+                    Voltar para lista
+                </button>
+            </div>
+        );
     }
-  }, [plant]);
 
-  if (!plant) {
     return (
-      <div className="text-center py-12">
-        <p className="text-stone-500">Planta não encontrada</p>
-        <button onClick={() => navigate('/')} className="mt-4 text-emerald-600 hover:underline">
-          Voltar para lista
-        </button>
-      </div>
+        <PlantDetailView
+            plant={plant}
+            onBack={() => navigate('/')}
+            onRefresh={refresh}
+            timeRange={timeRange}
+            onTimeRangeChange={setTimeRange}
+            soilData={data.SOIL_MOISTURE ?? []}
+            airData={data.AIR_QUALITY    ?? []}
+            tempData={data.TEMPERATURE   ?? []}
+            mockData={data.MOCK   ?? []}
+            lightData={[]}       // não implementado ainda
+            loading={loading}
+            connected={connected}
+        />
     );
-  }
-
-  return (
-    <PlantDetailView
-      plant={plant}
-      onBack={() => navigate('/')}
-      onRefresh={() => loadPlantData(plant.id)}
-      timeRange={timeRange}
-      onTimeRangeChange={setTimeRange}
-      soilData={soilData}
-      airData={airData}
-      tempData={tempData}
-      lightData={lightData}
-      loading={loading}
-    />
-  );
 };

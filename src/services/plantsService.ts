@@ -1,17 +1,22 @@
 import { api } from './api';
-import type { Plant, PlantStatus } from '../types';
+import type { Plant } from '../types';
 
 // ─── Tipos do contrato do Spring Boot ───────────────────────────────────────
+
+export interface ApiMeasurement {
+    id: number;
+    virtualSensorId: number;
+    measurementType: string;
+    plantMonitoringId: number;
+    updatedAt: string;
+}
 
 export interface ApiPlant {
     id: number;
     userId: number;
     commonName: string;
     specieName: string;
-    measurements: null | {
-        humidity?: number;
-        status?: string;
-    };
+    measurements: ApiMeasurement[] | null;
 }
 
 export interface CreatePlantRequest {
@@ -27,22 +32,32 @@ export interface UpdatePlantRequest {
 // ─── Conversores API ↔ Frontend ─────────────────────────────────────────────
 
 /** Transforma o objeto do Spring no formato que o frontend usa */
-export function toPlant(api: ApiPlant): Plant {
-    const humidity = api.measurements?.humidity ?? 0;
-    const status = (api.measurements?.status as PlantStatus) ?? deriveStatus(humidity);
+export function toPlant(raw: ApiPlant): Plant {
+    // Constrói measurementsMapping com os dois IDs necessários:
+    // measurementId → REST /measurements/{id}/history/
+    // sensorId      → tópico MQTT plant_monitor/{sensorId}/{capability}
+    const measurementsMapping: Plant['measurementsMapping'] = {};
+    for (const m of raw.measurements ?? []) {
+        const type = m.measurementType as keyof Plant['measurementsMapping'];
+        measurementsMapping[type] = {
+            measurementId: m.id,
+            sensorId:      m.virtualSensorId,
+        };
+    }
 
     return {
-        id: api.id,
-        name: api.commonName,
-        species: api.specieName,
+        id: raw.id,
+        name: raw.commonName,
+        species: raw.specieName,
         image: 'https://images.unsplash.com/photo-1618331835717-801e976710b2?auto=format&fit=crop&q=80&w=400',
-        status,
-        lastHumidity: humidity,
+        status: 'unknown',
+        lastHumidity: 0,
         location: '',
         hardwareId: 0,
-        sensorsMapping: { soil: null, env: null, light: null },
+        sensorsMapping:      { soil: null, env: null, light: null },
+        measurementsMapping,
         settings: {
-            humidity: { min: 40, max: 80, alert: true },
+            humidity: { min: 40, max: 80, alert: true  },
             temp:     { min: 18, max: 28, alert: false },
             air:      { min: 0,  max: 50, alert: true  },
             light:    { min: 200,max: 1000,alert: false },
@@ -56,13 +71,6 @@ export function toApiPlant(plant: Partial<Plant>): CreatePlantRequest {
         commonName: plant.name ?? '',
         specieName: plant.species ?? '',
     };
-}
-
-function deriveStatus(humidity: number): PlantStatus {
-    if (humidity === 0)   return 'unknown' as PlantStatus;
-    if (humidity < 30)    return 'critical';
-    if (humidity < 50)    return 'warning';
-    return 'healthy';
 }
 
 // ─── Chamadas HTTP ───────────────────────────────────────────────────────────

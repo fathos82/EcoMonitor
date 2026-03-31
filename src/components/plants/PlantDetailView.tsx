@@ -14,8 +14,11 @@ interface PlantDetailViewProps {
   airData: DataPoint[];
   tempData: DataPoint[];
   lightData: DataPoint[];
+  mockData: DataPoint[];
   loading: boolean;
 }
+
+// TODO: FAzer isso ser esvalavel.
 
 export const PlantDetailView: React.FC<PlantDetailViewProps> = ({
   plant,
@@ -24,6 +27,7 @@ export const PlantDetailView: React.FC<PlantDetailViewProps> = ({
   timeRange,
   onTimeRangeChange,
   soilData,
+  mockData,
   airData,
   tempData,
   lightData,
@@ -120,6 +124,7 @@ export const PlantDetailView: React.FC<PlantDetailViewProps> = ({
         <SensorCard title="Qualidade Ar" icon={Wind} data={airData} dataKey="aqi" unit=" AQI" color="blue" />
         <SensorCard title="Temperatura" icon={Thermometer} data={tempData} dataKey="temp" unit="°C" color="orange" />
         <SensorCard title="Luminosidade" icon={Sun} data={lightData} dataKey="lux" unit=" lx" color="yellow" />
+        <SensorCard title="Mock" icon={Thermometer} data={mockData} dataKey="mock" unit=" mock" color="yellow" />
       </div>
 
       <div className="bg-emerald-50/50 rounded-2xl p-4 md:p-6 border border-emerald-100 mb-8">

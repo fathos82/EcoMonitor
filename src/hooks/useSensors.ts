@@ -30,6 +30,7 @@ export function useSensors(deviceId: number) {
         queryKey: key,
         queryFn: () => sensorService.getByDevice(deviceId),
         staleTime: 30_000,
+        enabled: deviceId > 0,
     });
 
     const createMutation = useMutation({

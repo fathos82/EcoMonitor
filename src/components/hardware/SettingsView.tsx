@@ -89,7 +89,7 @@ const SensorsPanel: React.FC<SensorsPanelProps> = ({ deviceId }) => {
   const handleAdd = async (templateId: number, parameters: Record<string, string>) => {
     setFormError(null);
     try {
-      await createSensor({ device: deviceId, sensorTemplateId: templateId, parameters });
+      await createSensor({ deviceId: deviceId, sensorTemplateId: templateId, parameters });
       setModal({ type: 'closed' });
     } catch (err: any) {
       const msg = err.response?.data?.message ?? 'Erro ao registrar sensor.';

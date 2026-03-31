@@ -4,7 +4,7 @@ import type { ApiSensor, Sensor, SensorTemplate } from '../types';
 // ─── Payloads ─────────────────────────────────────────────────────────────────
 
 export interface CreateSensorRequest {
-    device: number;
+    deviceId: number;
     sensorTemplateId: number;
     parameters: Record<string, string>;
 }
@@ -48,6 +48,7 @@ export const sensorService = {
      * Se `parameters` estiver vazio, o backend usa os defaultParameters do template.
      */
     async create(data: CreateSensorRequest): Promise<Sensor> {
+        console.log(data)
         const res = await api.post<ApiSensor>('/sensors/', data);
         return toSensor(res.data);
     },
