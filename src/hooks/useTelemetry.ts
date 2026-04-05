@@ -5,56 +5,50 @@ import { MQTT_BROKER_URL, buildTopic } from '../config/mqtt';
 import { decodeMqttBatch, decodeRestHistory } from '../services/telemetryService';
 import { API_URL } from '../config/api';
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
+// ─── Tipos públicos ───────────────────────────────────────────────────────────
 
 export type TelemetryMap = Partial<Record<MeasurementType, DataPoint[]>>;
 
-interface UseTelemetryResult {
-    rawData: TelemetryMap;   // todos os pontos — usado para stats
-    chartData: TelemetryMap; // LTTB + sliding window — usado no gráfico
-    loading: boolean;
-    connected: boolean;
-    refresh: () => void;
+export interface TelemetryConfig {
+    /**
+     * Quantos pontos manter visíveis no gráfico (janela deslizante).
+     * @default 120
+     */
+    windowPoints?: number;
+
+    /**
+     * Intervalo (ms) entre cada ponto liberado da fila de saída.
+     * Fórmula: intervalo_batch_ms / tamanho_batch
+     * Ex: broker envia 10 pts a cada 2s → 2000 / 10 = 200ms
+     * @default 200
+     */
+    drainIntervalMs?: number;
+
+    /**
+     * Tamanho máximo da fila de saída por tipo.
+     * Descarta os mais antigos se acumular além desse limite.
+     * @default 50
+     */
+    maxQueueSize?: number;
 }
 
-// ─── LTTB e Helpers ──────────────────────────────────────────────────────────
+interface UseTelemetryResult {
+    rawData:   TelemetryMap;
+    chartData: TelemetryMap;
+    loading:   boolean;
+    connected: boolean;
+    refresh:   () => void;
+}
 
-const POINTS_LIMIT: Record<string, number> = {
-    '1H': 120,
-    '24H': 300,
-    '7D': 500,
+// ─── Defaults ─────────────────────────────────────────────────────────────────
+
+const DEFAULT_CONFIG: Required<TelemetryConfig> = {
+    windowPoints:    520,
+    drainIntervalMs: 200,
+    maxQueueSize:    50,
 };
 
-function lttb(data: DataPoint[], threshold: number): DataPoint[] {
-    if (data.length <= threshold) return data;
-    const sampled: DataPoint[] = [data[0]];
-    const bucketSize = (data.length - 2) / (threshold - 2);
-    let a = 0;
-
-    for (let i = 0; i < threshold - 2; i++) {
-        const nextStart = Math.floor((i + 1) * bucketSize) + 1;
-        const nextEnd = Math.min(Math.floor((i + 2) * bucketSize) + 1, data.length);
-        let avgTime = 0, avgValue = 0;
-        const len = nextEnd - nextStart;
-        for (let j = nextStart; j < nextEnd; j++) {
-            avgTime += data[j].time;
-            avgValue += data[j].value;
-        }
-        avgTime /= len; avgValue /= len;
-        const bucketStart = Math.floor(i * bucketSize) + 1;
-        const bucketEnd = Math.floor((i + 1) * bucketSize) + 1;
-        let maxArea = -1, maxIdx = bucketStart;
-        const pa = data[a];
-        for (let j = bucketStart; j < bucketEnd; j++) {
-            const area = Math.abs((pa.time - avgTime) * (data[j].value - pa.value) - (pa.time - data[j].time) * (avgValue - pa.value)) * 0.5;
-            if (area > maxArea) { maxArea = area; maxIdx = j; }
-        }
-        sampled.push(data[maxIdx]);
-        a = maxIdx;
-    }
-    sampled.push(data[data.length - 1]);
-    return sampled;
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function startOfDayUTC(): string {
     const d = new Date();
@@ -68,104 +62,147 @@ function nowISO(): string {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useTelemetry(plant: Plant | null, timeRange = '24H'): UseTelemetryResult {
-    const [rawData, setRawData] = useState<TelemetryMap>({});
+export function useTelemetry(
+    plant:  Plant | null,
+    config: TelemetryConfig = {},
+): UseTelemetryResult {
+    const { windowPoints, drainIntervalMs, maxQueueSize } = {
+        ...DEFAULT_CONFIG,
+        ...config,
+    };
+
+    const [rawData,   setRawData]   = useState<TelemetryMap>({});
     const [chartData, setChartData] = useState<TelemetryMap>({});
-    const [loading, setLoading] = useState(false);
+    const [loading,   setLoading]   = useState(false);
     const [connected, setConnected] = useState(false);
 
-    const clientRef = useRef<MqttClient | null>(null);
-    const mountedRef = useRef(true);
+    const clientRef     = useRef<MqttClient | null>(null);
+    const mountedRef    = useRef(true);
 
-    // Refs para o sistema de buffer/throttling
-    const bufferRef = useRef<Map<MeasurementType, DataPoint[]>>(new Map());
-    const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    /**
+     * Fila de saída: pontos vindos do MQTT aguardam aqui.
+     * O drain consome 1 por tick → chartData avança suavemente.
+     * Não há filtro de duplicatas aqui — o broker é a fonte da verdade.
+     */
+    const outputQueueRef = useRef<Map<MeasurementType, DataPoint[]>>(new Map());
+    const drainTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // ── Drain: libera 1 ponto por tipo a cada tick ────────────────────────────
+
+    const startDrain = useCallback(() => {
+        if (drainTimerRef.current) return;
+
+        drainTimerRef.current = setInterval(() => {
+            if (!mountedRef.current) return;
+
+            const queue = outputQueueRef.current;
+            let hasWork = false;
+            queue.forEach((pts) => { if (pts.length > 0) hasWork = true; });
+            if (!hasWork) return;
+
+            setChartData((prev) => {
+                const next = { ...prev };
+
+                queue.forEach((pts, type) => {
+                    if (pts.length === 0) return;
+
+                    // Descarte se a fila acumulou demais
+                    const trimmed = pts.length > maxQueueSize
+                        ? pts.slice(pts.length - maxQueueSize)
+                        : pts;
+
+                    const [point, ...rest] = trimmed;
+                    outputQueueRef.current.set(type, rest);
+
+                    const existing = next[type] ?? [];
+                    next[type] = [...existing, point].slice(-windowPoints);
+                });
+
+                return next;
+            });
+
+            // rawData acompanha o que foi liberado para o gráfico
+            setRawData((prev) => {
+                const next = { ...prev };
+                queue.forEach((_, type) => {
+                    next[type] = chartData[type] ?? prev[type] ?? [];
+                });
+                return next;
+            });
+
+        }, drainIntervalMs);
+    }, [drainIntervalMs, maxQueueSize, windowPoints]);
+
+    const stopDrain = useCallback(() => {
+        if (drainTimerRef.current) {
+            clearInterval(drainTimerRef.current);
+            drainTimerRef.current = null;
+        }
+    }, []);
+
+    // ── Histórico: seed inicial do gráfico ────────────────────────────────────
 
     const loadHistory = useCallback(async (p: Plant) => {
         if (!p.measurementsMapping) return;
         setLoading(true);
 
-        const entries = Object.entries(p.measurementsMapping) as [MeasurementType, { measurementId: number; sensorId: number } | null][];
-        const active = entries.filter(([, v]) => v !== null) as [MeasurementType, { measurementId: number; sensorId: number }][];
+        const entries = Object.entries(p.measurementsMapping) as
+            [MeasurementType, { measurementId: number; sensorId: number } | null][];
+        const active = entries.filter(([, v]) => v !== null) as
+            [MeasurementType, { measurementId: number; sensorId: number }][];
 
         const results = await Promise.allSettled(
             active.map(async ([type, { measurementId }]) => {
-                const url = `${API_URL}measurements/${measurementId}/history/newprotobuf/?start=${encodeURIComponent(startOfDayUTC())}&end=${encodeURIComponent(nowISO())}`;
+                const url =
+                    `${API_URL}measurements/${measurementId}/history/newprotobuf/` +
+                    `?start=${encodeURIComponent(startOfDayUTC())}` +
+                    `&end=${encodeURIComponent(nowISO())}`;
+
                 const res = await fetch(url, {
                     headers: {
                         Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
                         Accept: 'application/x-protobuf',
                     },
                 });
-                if (!res.ok) throw new Error(`HTTP ${res.status} para ${type}`);
-                const buffer = await res.arrayBuffer();
-                const points = await decodeRestHistory(buffer);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const buf    = await res.arrayBuffer();
+                const points = await decodeRestHistory(buf);
                 return { type, points };
             })
         );
 
         if (!mountedRef.current) return;
 
-        const nextRaw: TelemetryMap = {};
+        const nextRaw:   TelemetryMap = {};
         const nextChart: TelemetryMap = {};
-        const limit = POINTS_LIMIT[timeRange] ?? 300;
 
-        results.forEach((result) => {
-            if (result.status === 'fulfilled') {
-                const { type, points } = result.value;
-                nextRaw[type] = points;
-                nextChart[type] = lttb(points, limit);
+        results.forEach((r) => {
+            if (r.status === 'fulfilled') {
+                const { type, points } = r.value;
+                nextRaw[type]   = points;
+                nextChart[type] = points.slice(-windowPoints);
             }
         });
 
         setRawData(nextRaw);
         setChartData(nextChart);
         setLoading(false);
-    }, [timeRange]);
+    }, [windowPoints]);
 
-    const flush = useCallback(() => {
-        if (!mountedRef.current || bufferRef.current.size === 0) return;
-
-        const snapshot = new Map(bufferRef.current);
-        bufferRef.current.clear();
-        flushTimerRef.current = null;
-
-        setRawData((prev) => {
-            const next = { ...prev };
-            snapshot.forEach((pts, type) => {
-                const existing = next[type] ?? [];
-                const lastTime = existing.at(-1)?.time ?? 0;
-                const fresh = pts.filter((pt) => pt.time > lastTime);
-                if (fresh.length > 0) next[type] = [...existing, ...fresh];
-            });
-            return next;
-        });
-
-        setChartData((prev) => {
-            const next = { ...prev };
-            snapshot.forEach((pts, type) => {
-                const existing = next[type] ?? [];
-                const lastTime = existing.at(-1)?.time ?? 0;
-                const fresh = pts.filter((pt) => pt.time > lastTime);
-                if (fresh.length === 0) return;
-
-                const combined = [...existing, ...fresh];
-                // Mantém o tamanho do array estável (Sliding Window)
-                next[type] = combined.slice(-(existing.length || combined.length));
-            });
-            return next;
-        });
-    }, []);
+    // ── MQTT ──────────────────────────────────────────────────────────────────
 
     const connectMqtt = useCallback((p: Plant) => {
         if (!p.measurementsMapping) return;
 
         if (clientRef.current) {
             clientRef.current.end(true);
+            clientRef.current = null;
         }
 
-        const entries = Object.entries(p.measurementsMapping) as [MeasurementType, { sensorId: number } | null][];
-        const active = entries.filter(([, v]) => v !== null) as [MeasurementType, { sensorId: number }][];
+        const entries = Object.entries(p.measurementsMapping) as
+            [MeasurementType, { sensorId: number } | null][];
+        const active = entries.filter(([, v]) => v !== null) as
+            [MeasurementType, { sensorId: number }][];
         if (active.length === 0) return;
 
         const topicMap: Record<string, MeasurementType> = {};
@@ -177,7 +214,10 @@ export function useTelemetry(plant: Plant | null, timeRange = '24H'): UseTelemet
             topics.push(topic);
         });
 
-        const client = mqtt.connect(MQTT_BROKER_URL, { clean: true, reconnectPeriod: 3000 });
+        const client = mqtt.connect(MQTT_BROKER_URL, {
+            clean: true,
+            reconnectPeriod: 3_000,
+        });
 
         client.on('connect', () => {
             if (!mountedRef.current) return;
@@ -185,7 +225,13 @@ export function useTelemetry(plant: Plant | null, timeRange = '24H'): UseTelemet
             client.subscribe(topics, { qos: 0 });
         });
 
-        client.on('disconnect', () => { if (mountedRef.current) setConnected(false); });
+        client.on('reconnect', () => {
+            if (mountedRef.current) setConnected(false);
+        });
+
+        client.on('disconnect', () => {
+            if (mountedRef.current) setConnected(false);
+        });
 
         client.on('message', async (topic, payload) => {
             const type = topicMap[topic];
@@ -195,21 +241,29 @@ export function useTelemetry(plant: Plant | null, timeRange = '24H'): UseTelemet
                 const newPoints = await decodeMqttBatch(payload);
                 if (!mountedRef.current || newPoints.length === 0) return;
 
-                // Acumula no buffer via Ref
-                const current = bufferRef.current.get(type) ?? [];
-                bufferRef.current.set(type, [...current, ...newPoints]);
+                // ─────────────────────────────────────────────────────────────
+                // Sem filtro de duplicatas aqui.
+                //
+                // O filtro antigo (pt.time > lastTime) lia rawDataRef que só
+                // existia no momento da criação do handler — depois que o
+                // histórico carregava, todos os pontos novos eram descartados
+                // como "duplicatas" (closure stale).
+                //
+                // O broker é a fonte da verdade: qualquer ponto que chegou
+                // pelo MQTT vai direto para a fila de saída.
+                // ─────────────────────────────────────────────────────────────
+                const current = outputQueueRef.current.get(type) ?? [];
+                outputQueueRef.current.set(type, [...current, ...newPoints]);
 
-                // Throttle: agenda o flush para 500ms se não houver um pendente
-                if (!flushTimerRef.current) {
-                    flushTimerRef.current = setTimeout(flush, 500);
-                }
             } catch (e) {
                 console.warn('[MQTT] Erro ao decodificar batch:', e);
             }
         });
 
         clientRef.current = client;
-    }, [flush]);
+    }, []); // sem dependências — não lê state nem refs de state
+
+    // ── Efeito principal ─────────────────────────────────────────────────────
 
     useEffect(() => {
         mountedRef.current = true;
@@ -218,8 +272,10 @@ export function useTelemetry(plant: Plant | null, timeRange = '24H'): UseTelemet
         setRawData({});
         setChartData({});
         setConnected(false);
+        outputQueueRef.current.clear();
 
         loadHistory(plant);
+        startDrain();
 
         const timer = setTimeout(() => {
             if (mountedRef.current) connectMqtt(plant);
@@ -228,17 +284,19 @@ export function useTelemetry(plant: Plant | null, timeRange = '24H'): UseTelemet
         return () => {
             mountedRef.current = false;
             clearTimeout(timer);
-            if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+            stopDrain();
             if (clientRef.current) {
                 clientRef.current.end(true);
                 clientRef.current = null;
             }
-            bufferRef.current.clear();
+            outputQueueRef.current.clear();
         };
-    }, [plant?.id, timeRange, loadHistory, connectMqtt]);
+    }, [plant?.id]);
 
     const refresh = useCallback(() => {
-        if (plant) loadHistory(plant);
+        if (!plant) return;
+        outputQueueRef.current.clear();
+        loadHistory(plant);
     }, [plant, loadHistory]);
 
     return { rawData, chartData, loading, connected, refresh };

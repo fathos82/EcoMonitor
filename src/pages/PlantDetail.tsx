@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../stores/AppContext';
 import { useTelemetry } from '../hooks/useTelemetry';
@@ -8,10 +8,12 @@ export const PlantDetail: React.FC = () => {
     const { id }     = useParams<{ id: string }>();
     const navigate   = useNavigate();
     const { plants } = useAppStore();
-    const [timeRange, setTimeRange] = useState('24H');
 
     const plant = plants.find((p) => p.id === Number(id)) ?? null;
-    const { rawData, loading, connected, refresh } = useTelemetry(plant);
+
+    // chartData  → janela deslizante para o gráfico
+    // rawData    → todos os pontos para stats
+    const { chartData, rawData, loading, connected, refresh } = useTelemetry(plant);
 
     if (!plant) {
         return (
@@ -24,32 +26,30 @@ export const PlantDetail: React.FC = () => {
         );
     }
 
-    // Extrai measurementId de cada tipo do mapping
     const mm = plant.measurementsMapping ?? {};
-    const soilMeasurementId  = mm.SOIL_MOISTURE?.measurementId ?? 0;
-    const airMeasurementId   = mm.AIR_QUALITY?.measurementId   ?? 0;
-    const tempMeasurementId  = mm.TEMPERATURE?.measurementId   ?? 0;
-    const mockMeasurementId  = mm.MOCK?.measurementId   ?? 0;
+    const soilMeasurementId = mm.SOIL_MOISTURE?.measurementId ?? 0;
+    const airMeasurementId  = mm.AIR_QUALITY?.measurementId   ?? 0;
+    const tempMeasurementId = mm.TEMPERATURE?.measurementId   ?? 0;
+    const mockMeasurementId = mm.MOCK?.measurementId          ?? 0;
 
     return (
         <PlantDetailView
             plant={plant}
             onBack={() => navigate('/')}
             onRefresh={refresh}
-            timeRange={timeRange}
-            onTimeRangeChange={setTimeRange}
-            soilData={rawData.SOIL_MOISTURE  ?? []}
+            connected={connected}
+            // Gráfico recebe chartData (janela deslizante)
+            soilData={chartData.SOIL_MOISTURE ?? []}
             soilMeasurementId={soilMeasurementId}
-            airData={rawData.AIR_QUALITY     ?? []}
+            airData={chartData.AIR_QUALITY    ?? []}
             airMeasurementId={airMeasurementId}
-            tempData={rawData.TEMPERATURE    ?? []}
+            tempData={chartData.TEMPERATURE   ?? []}
             tempMeasurementId={tempMeasurementId}
-            mockData={rawData.MOCK    ?? []}
+            mockData={chartData.MOCK          ?? []}
             mockMeasurementId={mockMeasurementId}
             lightData={[]}
             lightMeasurementId={0}
             loading={loading}
-            connected={connected}
         />
     );
 };
