@@ -11,9 +11,8 @@ export const PlantDetail: React.FC = () => {
 
     const plant = plants.find((p) => p.id === Number(id)) ?? null;
 
-    // chartData  → janela deslizante para o gráfico
-    // rawData    → todos os pontos para stats
-    const { chartData, rawData, loading, connected, refresh } = useTelemetry(plant);
+    // data → janela completa (windowPoints). Card mostra últimos 60; modal expandido mostra tudo.
+    const { data, connected } = useTelemetry(plant);
 
     if (!plant) {
         return (
@@ -36,20 +35,17 @@ export const PlantDetail: React.FC = () => {
         <PlantDetailView
             plant={plant}
             onBack={() => navigate('/')}
-            onRefresh={refresh}
             connected={connected}
-            // Gráfico recebe chartData (janela deslizante)
-            soilData={chartData.SOIL_MOISTURE ?? []}
+            soilData={data.SOIL_MOISTURE ?? []}
             soilMeasurementId={soilMeasurementId}
-            airData={chartData.AIR_QUALITY    ?? []}
+            airData={data.AIR_QUALITY    ?? []}
             airMeasurementId={airMeasurementId}
-            tempData={chartData.TEMPERATURE   ?? []}
+            tempData={data.TEMPERATURE   ?? []}
             tempMeasurementId={tempMeasurementId}
-            mockData={chartData.MOCK          ?? []}
+            mockData={data.MOCK          ?? []}
             mockMeasurementId={mockMeasurementId}
             lightData={[]}
             lightMeasurementId={0}
-            loading={loading}
         />
     );
 };
