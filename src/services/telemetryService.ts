@@ -52,44 +52,38 @@ async function getRestResponseType(): Promise<protobuf.Type> {
 
 /**
  * Decodifica um SensorReadingBatch vindo do MQTT (binário).
- * Retorna um array de DataPoints com timestamp absoluto em ms.
+ * Retorna um array de DataPoints { time, value } com timestamp absoluto em ms.
  */
-export async function decodeMqttBatch(
-    raw: Uint8Array,
-    valueKey: string,          // ex: 'humidity', 'temp', 'aqi'
-): Promise<DataPoint[]> {
+export async function decodeMqttBatch(raw: Uint8Array): Promise<DataPoint[]> {
     const type = await getMqttBatchType();
     const msg  = type.decode(raw) as any;
 
     const baseMs: number =
         typeof msg.baseTimestamp === 'object'
-            ? msg.baseTimestamp.toNumber()   // Long
+            ? msg.baseTimestamp.toNumber()
             : Number(msg.baseTimestamp);
 
     return (msg.readings ?? []).map((r: any) => ({
-        time:       baseMs + r.deltaMs,
-        [valueKey]: r.value,
+        time:  baseMs + r.deltaMs,
+        value: r.value,
     }));
 }
 
 /**
  * Decodifica um SensorReadingsResponse vindo da API REST (binário).
- * Retorna um array de DataPoints ordenado por timestamp.
+ * Retorna um array de DataPoints { time, value } ordenado por timestamp.
  */
-export async function decodeRestHistory(
-    raw: ArrayBuffer,
-    valueKey: string,
-): Promise<DataPoint[]> {
+export async function decodeRestHistory(raw: ArrayBuffer): Promise<DataPoint[]> {
     const type  = await getRestResponseType();
     const bytes = new Uint8Array(raw);
     const msg   = type.decode(bytes) as any;
 
     return (msg.readings ?? [])
         .map((r: any) => ({
-            time:       typeof r.timestamp === 'object'
-                            ? r.timestamp.toNumber()
-                            : Number(r.timestamp),
-            [valueKey]: r.value,
+            time:  typeof r.timestamp === 'object'
+                ? r.timestamp.toNumber()
+                : Number(r.timestamp),
+            value: r.value,
         }))
         .sort((a: DataPoint, b: DataPoint) => a.time - b.time);
 }

@@ -53,7 +53,7 @@ export interface PlantSettings {
   temp:     { min: number; max: number; alert: boolean };
   air:      { min: number; max: number; alert: boolean };
   light:    { min: number; max: number; alert: boolean };
-  mock:      { min: number; max: number; alert: boolean };
+  mock:    { min: number; max: number; alert: boolean };
 }
 
 export interface MeasurementEntry {
@@ -80,11 +80,9 @@ export interface Plant {
 
 // ─── Charts ──────────────────────────────────────────────────────────────────
 
-
-// todo: change to value
 export interface DataPoint {
-  time: number;
-  [key: string]: number;
+  time:  number;
+  value: number;
 }
 
 // ─── User ────────────────────────────────────────────────────────────────────

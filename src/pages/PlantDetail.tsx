@@ -4,7 +4,6 @@ import { useAppStore } from '../stores/AppContext';
 import { useTelemetry } from '../hooks/useTelemetry';
 import { PlantDetailView } from '../components/plants/PlantDetailView';
 
-// TODO: Fazer isso ser escalavel.
 export const PlantDetail: React.FC = () => {
     const { id }     = useParams<{ id: string }>();
     const navigate   = useNavigate();
@@ -12,7 +11,7 @@ export const PlantDetail: React.FC = () => {
     const [timeRange, setTimeRange] = useState('24H');
 
     const plant = plants.find((p) => p.id === Number(id)) ?? null;
-    const { data, loading, connected, refresh } = useTelemetry(plant);
+    const { rawData, loading, connected, refresh } = useTelemetry(plant);
 
     if (!plant) {
         return (
@@ -25,6 +24,13 @@ export const PlantDetail: React.FC = () => {
         );
     }
 
+    // Extrai measurementId de cada tipo do mapping
+    const mm = plant.measurementsMapping ?? {};
+    const soilMeasurementId  = mm.SOIL_MOISTURE?.measurementId ?? 0;
+    const airMeasurementId   = mm.AIR_QUALITY?.measurementId   ?? 0;
+    const tempMeasurementId  = mm.TEMPERATURE?.measurementId   ?? 0;
+    const mockMeasurementId  = mm.MOCK?.measurementId   ?? 0;
+
     return (
         <PlantDetailView
             plant={plant}
@@ -32,11 +38,16 @@ export const PlantDetail: React.FC = () => {
             onRefresh={refresh}
             timeRange={timeRange}
             onTimeRangeChange={setTimeRange}
-            soilData={data.SOIL_MOISTURE ?? []}
-            airData={data.AIR_QUALITY    ?? []}
-            tempData={data.TEMPERATURE   ?? []}
-            mockData={data.MOCK   ?? []}
-            lightData={[]}       // não implementado ainda
+            soilData={rawData.SOIL_MOISTURE  ?? []}
+            soilMeasurementId={soilMeasurementId}
+            airData={rawData.AIR_QUALITY     ?? []}
+            airMeasurementId={airMeasurementId}
+            tempData={rawData.TEMPERATURE    ?? []}
+            tempMeasurementId={tempMeasurementId}
+            mockData={rawData.MOCK    ?? []}
+            mockMeasurementId={mockMeasurementId}
+            lightData={[]}
+            lightMeasurementId={0}
             loading={loading}
             connected={connected}
         />
