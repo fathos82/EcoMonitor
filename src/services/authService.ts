@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { User } from '../types';
+import type {User} from "../types";
 
 export interface LoginRequest {
   email: string;
@@ -10,6 +10,12 @@ export interface RegisterRequest {
   name: string;
   email: string;
   password: string;
+  phone?: string;
+}
+
+export interface UpdateMeRequest {
+  name?:  string;
+  phone?: string;
 }
 
 // Contrato real do Spring Boot
@@ -26,6 +32,7 @@ export interface RefreshResponse {
 export const authService = {
   /** POST /auth/login */
   async login(data: LoginRequest): Promise<AuthResponse> {
+
     const response = await api.post<AuthResponse>('/auth/login/', data);
     return response.data;
   },
@@ -45,7 +52,7 @@ export const authService = {
     const response = await api.post<RefreshResponse>(
         '/auth/refresh/',
         { refreshToken },
-        { skipAuthRefresh: true } as any  // flag para o interceptor ignorar esta chamada
+        { skipAuthRefresh: true } as never  // flag para o interceptor ignorar esta chamada
     );
     return response.data;
   },
@@ -53,6 +60,13 @@ export const authService = {
   /** GET /auth/me — valida sessão e retorna dados do usuário */
   async me(): Promise<User> {
     const response = await api.get<User>('/auth/me/');
+    return response.data;
+  },
+
+  /** PATCH /auth/me — atualiza nome e/ou telefone */
+  async updateMe(data: UpdateMeRequest): Promise<User> {
+    console.log(data);
+    const response = await api.patch<User>('/auth/me/', data);
     return response.data;
   },
 };

@@ -3,16 +3,19 @@ import mqtt, { type MqttClient } from 'mqtt';
 import type { Plant, DataPoint, MeasurementType } from '../types';
 import { MQTT_BROKER_URL, buildTopic } from '../config/mqtt';
 import { TELEMETRY_CONFIG } from '../config/telemetry';
-import { decodeMqttBatch } from '../services/telemetryService';
+import {decodeMqttBatch} from "../services/telemetryService.ts";
 
 // ─── Tipos públicos ───────────────────────────────────────────────────────────
 
-export type TelemetryMap = Partial<Record<MeasurementType, DataPoint[]>>;
+export type TelemetryMap    = Partial<Record<MeasurementType, DataPoint[]>>;
+export type ActiveSensorMap = Partial<Record<MeasurementType, boolean>>;
+
+const SENSOR_TIMEOUT_MS = 10_000; // 5s sem dados → offline
 
 export interface UseTelemetryResult {
-    /** Todos os pontos acumulados na janela (windowPoints). */
-    data:      TelemetryMap;
-    connected: boolean;
+    data:          TelemetryMap;
+    connected:     boolean;
+    activeSensors: ActiveSensorMap;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -20,13 +23,43 @@ export interface UseTelemetryResult {
 export function useTelemetry(plant: Plant | null): UseTelemetryResult {
     const { windowPoints, drainIntervalMs, maxQueueSize } = TELEMETRY_CONFIG;
 
-    const [data,      setData]      = useState<TelemetryMap>({});
-    const [connected, setConnected] = useState(false);
+    const [data,          setData]          = useState<TelemetryMap>({});
+    const [connected,     setConnected]     = useState(false);
+    const [activeSensors, setActiveSensors] = useState<ActiveSensorMap>({});
 
     const clientRef      = useRef<MqttClient | null>(null);
     const mountedRef     = useRef(true);
     const outputQueueRef = useRef<Map<MeasurementType, DataPoint[]>>(new Map());
     const drainTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+    const lastSeenRef    = useRef<Map<MeasurementType, number>>(new Map());
+    const timeoutTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // ── Ticker de timeout: verifica a cada segundo quais sensores estão vivos ──
+
+    const startTimeoutChecker = useCallback(() => {
+        if (timeoutTimerRef.current) return;
+        timeoutTimerRef.current = setInterval(() => {
+            if (!mountedRef.current) return;
+            const now = Date.now();
+            setActiveSensors((prev) => {
+                const next: ActiveSensorMap = {};
+                let changed = false;
+                lastSeenRef.current.forEach((ts, type) => {
+                    const isActive = (now - ts) < SENSOR_TIMEOUT_MS;
+                    next[type] = isActive;
+                    if (prev[type] !== isActive) changed = true;
+                });
+                return changed ? next : prev;
+            });
+        }, 1_000);
+    }, []);
+
+    const stopTimeoutChecker = useCallback(() => {
+        if (timeoutTimerRef.current) {
+            clearInterval(timeoutTimerRef.current);
+            timeoutTimerRef.current = null;
+        }
+    }, []);
 
     // ── Drain: libera 1 ponto por tipo a cada tick ────────────────────────────
 
@@ -113,8 +146,9 @@ export function useTelemetry(plant: Plant | null): UseTelemetryResult {
             const type = topicMap[topic];
             if (!type || !mountedRef.current) return;
             try {
-                const newPoints = await decodeMqttBatch(payload);
+                const newPoints = await  decodeMqttBatch(payload);
                 if (!mountedRef.current || newPoints.length === 0) return;
+                lastSeenRef.current.set(type, Date.now());
                 const current = outputQueueRef.current.get(type) ?? [];
                 outputQueueRef.current.set(type, [...current, ...newPoints]);
             } catch (e) {
@@ -133,9 +167,12 @@ export function useTelemetry(plant: Plant | null): UseTelemetryResult {
 
         setData({});
         setConnected(false);
+        setActiveSensors({});
         outputQueueRef.current.clear();
+        lastSeenRef.current.clear();
 
         startDrain();
+        startTimeoutChecker();
 
         const timer = setTimeout(() => {
             if (mountedRef.current) connectMqtt(plant);
@@ -145,13 +182,15 @@ export function useTelemetry(plant: Plant | null): UseTelemetryResult {
             mountedRef.current = false;
             clearTimeout(timer);
             stopDrain();
+            stopTimeoutChecker();
             if (clientRef.current) {
                 clientRef.current.end(true);
                 clientRef.current = null;
             }
             outputQueueRef.current.clear();
+            lastSeenRef.current.clear();
         };
     }, [plant?.id]);
 
-    return { data, connected };
+    return { data, connected, activeSensors };
 }

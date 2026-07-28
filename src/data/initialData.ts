@@ -9,9 +9,9 @@ export const INITIAL_HARDWARE: Hardware[] = [
     status: 'online',
     uptime: '5d 12h',
     sensors: [
-      { id: 101, name: 'Sensor Solo A', type: 'soil_digital', config: { signal: '21' }, status: 'ok', lastRead: 'Agora', errorMessage: '' },
-      { id: 103, name: 'Ambiente Interno', type: 'dht', config: { data: '4' }, status: 'ok', lastRead: 'Agora', errorMessage: '' },
-      { id: 104, name: 'Luz Solar', type: 'i2c_env', config: { address: '0x44' }, status: 'error', lastRead: 'Falha', errorMessage: 'Timeout na comunicação I2C. Verifique a conexão dos cabos SDA/SCL.' },
+      { id: 101, alias: 'Sensor Solo A', type: 'soil_digital', config: { signal: '21' }, status: 'ok', lastRead: 'Agora', errorMessage: '' },
+      { id: 103, alias: 'Ambiente Interno', type: 'dht', config: { data: '4' }, status: 'ok', lastRead: 'Agora', errorMessage: '' },
+      { id: 104, alias: 'Luz Solar', type: 'i2c_env', config: { address: '0x44' }, status: 'error', lastRead: 'Falha', errorMessage: 'Timeout na comunicação I2C. Verifique a conexão dos cabos SDA/SCL.' },
     ]
   },
   {
@@ -22,7 +22,7 @@ export const INITIAL_HARDWARE: Hardware[] = [
     status: 'online',
     uptime: '1d 4h',
     sensors: [
-      { id: 201, name: 'Solo Vaso 1', type: 'soil_analog', config: { signal: 'A0' }, status: 'ok', lastRead: '10s', errorMessage: '' }
+      { id: 201, alias: 'Solo Vaso 1', type: 'soil_analog', config: { signal: 'A0' }, status: 'ok', lastRead: '10s', errorMessage: '' }
     ]
   }
 ];

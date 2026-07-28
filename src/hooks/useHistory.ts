@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { DataPoint } from '../types';
-import { API_URL } from '../config/api';
-import { decodeRestHistory } from '../services/telemetryService';
+import { measurementService, type HistoryResult } from '../services/measurementService';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -13,8 +12,9 @@ export interface HistoryFilter {
     endDate:   string;
 }
 
-interface UseHistoryResult {
-    data:      DataPoint[];
+export interface UseHistoryResult {
+    points:    DataPoint[];
+    stats:     { min: number; max: number; avg: number } | null;
     loading:   boolean;
     error:     string | null;
     filter:    HistoryFilter;
@@ -44,7 +44,8 @@ function defaultFilter(): HistoryFilter {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useHistory(): UseHistoryResult {
-    const [data,    setData]    = useState<DataPoint[]>([]);
+    const [points,  setPoints]  = useState<DataPoint[]>([]);
+    const [stats,   setStats]   = useState<{ min: number; max: number; avg: number } | null>(null);
     const [loading, setLoading] = useState(false);
     const [error,   setError]   = useState<string | null>(null);
     const [filter,  setFilter]  = useState<HistoryFilter>(defaultFilter);
@@ -57,28 +58,17 @@ export function useHistory(): UseHistoryResult {
         setError(null);
 
         try {
-            const url = `${API_URL}measurements/${measurementId}/history/newprotobuf/`
-                + `?start=${encodeURIComponent(start)}`
-                + `&end=${encodeURIComponent(end)}`;
-
-            const res = await window.fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-                    Accept: 'application/x-protobuf',
-                },
-            });
-
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const buffer = await res.arrayBuffer();
-            const points = await decodeRestHistory(buffer);
-            setData(points);
+            const result: HistoryResult = await measurementService.getHistory(measurementId, start, end);
+            setPoints(result.points);
+            setStats({ min: result.min, max: result.max, avg: result.avg });
         } catch (e: any) {
-            setError(e.message ?? 'Erro ao carregar histórico');
-            setData([]);
+            setError(e.response?.data?.message ?? e.message ?? 'Erro ao carregar histórico');
+            setPoints([]);
+            setStats(null);
         } finally {
             setLoading(false);
         }
     }, [filter]);
 
-    return { data, loading, error, filter, setFilter, fetch };
+    return { points, stats, loading, error, filter, setFilter, fetch };
 }

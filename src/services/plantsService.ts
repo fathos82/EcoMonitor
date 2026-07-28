@@ -66,6 +66,7 @@ export function toPlant(raw: ApiPlant): Plant {
 }
 
 /** Transforma o objeto do frontend no formato que o Spring espera */
+/** Transforma o objeto do frontend no formato que o Spring espera */
 export function toApiPlant(plant: Partial<Plant>): CreatePlantRequest {
     return {
         commonName: plant.name ?? '',
@@ -94,12 +95,13 @@ export const plantService = {
             commonName: plant.name,
             specieName: plant.species,
         };
-        const res = await api.put<ApiPlant>(`/plants/${id}/`, body);
+        console.log(body)
+        const res = await api.patch<ApiPlant>(`/plants/${id}/`, body);
         return toPlant(res.data);
     },
 
     /** DELETE /plants/{id} */
     async remove(id: number): Promise<void> {
-        await api.delete(`/plants/${id}`);
+        await api.delete(`/plants/${id}/`);
     },
 };

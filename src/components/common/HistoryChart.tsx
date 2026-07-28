@@ -41,7 +41,7 @@ export const HistoryChart: React.FC<HistoryChartProps> = ({ data, color, unit })
     }
 
     return (
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={data} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
                 <defs>
                     <linearGradient id="histGradient" x1="0" y1="0" x2="0" y2="1">
@@ -62,6 +62,7 @@ export const HistoryChart: React.FC<HistoryChartProps> = ({ data, color, unit })
                     minTickGap={60}
                 />
                 <YAxis
+                    domain={['auto', 'auto']} /* ✨ Adicionado: O gráfico agora ajusta a escala Y automaticamente */
                     tick={{ fill: '#78716c', fontSize: 11 }}
                     axisLine={false}
                     tickLine={false}

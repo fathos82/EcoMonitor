@@ -1,42 +1,51 @@
 import React, { useState } from 'react';
 import {
     Camera, ChevronLeft, Droplets, Leaf,
-    RefreshCw, Sun, Thermometer, Wind, Zap,
+     Thermometer, Wind, Zap, CircuitBoard,
 } from 'lucide-react';
-import type { Plant, DataPoint } from '../../types';
+import type { Plant, DataPoint, MeasurementType } from '../../types';
+import type { TelemetryMap, ActiveSensorMap } from '../../hooks/useTelemetry';
 import { ActionButton } from '../common/ActionButton';
 import { SensorCard } from '../common/SensorCard';
 
+// ─── Configuração visual por MeasurementType ──────────────────────────────────
+// Adicionar novos tipos aqui é suficiente — nada mais precisa mudar.
+
+const MEASUREMENT_CONFIG: Record<MeasurementType, {
+    title: string;
+    icon:  React.ElementType;
+    unit:  string;
+    color: string;
+}> = {
+    HUMIDITY: { title: 'Umidade Solo', icon: Droplets,     unit: '%',    color: 'green'  },
+    TEMPERATURE:   { title: 'Temperatura',  icon: Thermometer,  unit: '°C',   color: 'orange' },
+    AIR_QUALITY:   { title: 'Qualidade Ar', icon: Wind,         unit: ' AQI', color: 'blue'   },
+    MOCK:          { title: 'Mock',         icon: CircuitBoard, unit: '',      color: 'yellow' },
+};
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
 interface PlantDetailViewProps {
-    plant:              Plant;
-    onBack:             () => void;
-    onRefresh:          () => void;
-    connected:          boolean;
-    soilData:           DataPoint[];
-    soilMeasurementId:  number;
-    airData:            DataPoint[];
-    airMeasurementId:   number;
-    tempData:           DataPoint[];
-    tempMeasurementId:  number;
-    mockData:           DataPoint[];
-    mockMeasurementId:  number;
-    lightData:          DataPoint[];
-    lightMeasurementId: number;
-    loading:            boolean;
+    plant:          Plant;
+    onBack:         () => void;
+    connected:      boolean;
+    activeSensors:  ActiveSensorMap;
+    telemetryData:  TelemetryMap;
 }
 
+// ─── Componente ───────────────────────────────────────────────────────────────
+
 export const PlantDetailView: React.FC<PlantDetailViewProps> = ({
-                                                                    plant, onBack, onRefresh, connected,
-                                                                    soilData, soilMeasurementId,
-                                                                    airData,  airMeasurementId,
-                                                                    tempData, tempMeasurementId,
-                                                                    mockData, mockMeasurementId,
-                                                                    lightData, lightMeasurementId,
-                                                                    loading,
+                                                                    plant, onBack, connected, activeSensors, telemetryData,
                                                                 }) => {
     const [showCamera, setShowCamera] = useState(false);
     const [isWatering, setIsWatering] = useState(false);
     const [isLightOn,  setIsLightOn]  = useState(false);
+
+    // Apenas os tipos que a planta tem no measurementsMapping
+    const activeTypes = Object.entries(plant.measurementsMapping ?? {})
+        .filter(([, entry]) => entry !== null)
+        .map(([type]) => type as MeasurementType);
 
     return (
         <div className="max-w-6xl mx-auto space-y-6 md:space-y-8 animate-in slide-in-from-right duration-300 pb-24">
@@ -69,17 +78,6 @@ export const PlantDetailView: React.FC<PlantDetailViewProps> = ({
                         <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-stone-300'}`} />
                         {connected ? 'MQTT Conectado' : 'MQTT Desconectado'}
                     </div>
-
-                    <button
-                        onClick={onRefresh}
-                        disabled={loading}
-                        className={`flex items-center justify-center gap-2 px-3 py-2.5 md:px-4 md:py-2 bg-stone-800 hover:bg-stone-700 text-white rounded-xl text-xs md:text-sm font-bold transition-all shadow-lg shadow-stone-300 active:scale-95 ${
-                            loading ? 'opacity-70 cursor-not-allowed' : ''
-                        }`}
-                    >
-                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                        <span className="hidden md:inline">Atualizar</span>
-                    </button>
                 </div>
 
                 <div className="grid grid-cols-2 md:flex gap-2 w-full md:w-auto">
@@ -125,54 +123,39 @@ export const PlantDetailView: React.FC<PlantDetailViewProps> = ({
                 />
             </div>
 
-            {/* ── Gráficos ─────────────────────────────────────────────── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <SensorCard
-                    title="Umidade Solo"
-                    icon={Droplets}
-                    data={soilData}
-                    unit="%"
-                    color="green"
-                    measurementId={soilMeasurementId}
-                    connected={connected}
-                />
-                <SensorCard
-                    title="Qualidade Ar"
-                    icon={Wind}
-                    data={airData}
-                    unit=" AQI"
-                    color="blue"
-                    measurementId={airMeasurementId}
-                    connected={connected}
-                />
-                <SensorCard
-                    title="Temperatura"
-                    icon={Thermometer}
-                    data={tempData}
-                    unit="°C"
-                    color="orange"
-                    measurementId={tempMeasurementId}
-                    connected={connected}
-                />
-                <SensorCard
-                    title="Luminosidade"
-                    icon={Sun}
-                    data={lightData}
-                    unit=" lx"
-                    color="yellow"
-                    measurementId={lightMeasurementId}
-                    connected={connected}
-                />
-                <SensorCard
-                    title="Mock"
-                    icon={Sun}
-                    data={mockData}
-                    unit=""
-                    color="yellow"
-                    measurementId={mockMeasurementId}
-                    connected={connected}
-                />
-            </div>
+            {/* ── Cards de sensores — apenas os monitorados pela planta ── */}
+            {activeTypes.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-stone-400 gap-3">
+                    <CircuitBoard size={36} strokeWidth={1.5} />
+                    <p className="font-bold text-base">Nenhuma medida configurada</p>
+                    <p className="text-sm text-center">Edite esta planta para associar sensores.</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                    {activeTypes.map((type) => {
+                        const config = MEASUREMENT_CONFIG[type];
+                        if (!config) return null;
+
+                        const entry        = plant.measurementsMapping?.[type];
+                        const measurementId = entry?.measurementId ?? 0;
+                        const isActive     = !!activeSensors[type];
+                        const data: DataPoint[] = telemetryData[type] ?? [];
+
+                        return (
+                            <SensorCard
+                                key={type}
+                                title={config.title}
+                                icon={config.icon}
+                                data={data}
+                                unit={config.unit}
+                                color={config.color}
+                                measurementId={measurementId}
+                                connected={connected && isActive}
+                            />
+                        );
+                    })}
+                </div>
+            )}
 
             {/* ── Análise ──────────────────────────────────────────────── */}
             <div className="bg-emerald-50/50 rounded-2xl p-4 md:p-6 border border-emerald-100 mb-8">

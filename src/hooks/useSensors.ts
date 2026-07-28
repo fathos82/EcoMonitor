@@ -29,7 +29,9 @@ export function useSensors(deviceId: number) {
     const query = useQuery({
         queryKey: key,
         queryFn: () => sensorService.getByDevice(deviceId),
-        staleTime: 30_000,
+        staleTime: 10_000,
+        refetchInterval: 10_000,
+        refetchIntervalInBackground: false,
         enabled: deviceId > 0,
     });
 

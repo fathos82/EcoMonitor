@@ -6,7 +6,7 @@ export const MobileNav: React.FC = () => {
   const navItems = [
     { to: '/', icon: LayoutGrid, label: 'Cultivos' },
     { to: '/reports', icon: Activity, label: 'Relatórios' },
-    { to: '/settings', icon: Settings, label: 'Sensores Pi' },
+    { to: '/settings', icon: Settings, label: 'Hardware' },
   ];
 
   return (

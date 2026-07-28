@@ -1,10 +1,8 @@
 import protobuf from 'protobufjs';
 import type { DataPoint } from '../types';
 
-// ─── Schemas Protobuf inline ──────────────────────────────────────────────────
-//
-// Mantidos como string para evitar o passo de compilação do protoc.
-// Se o schema mudar, basta editar aqui.
+// ─── Schema Protobuf — MQTT only ──────────────────────────────────────────────
+// O histórico REST agora retorna JSON. Apenas mensagens MQTT usam Protobuf.
 
 const MQTT_PROTO = `
   syntax = "proto3";
@@ -18,21 +16,9 @@ const MQTT_PROTO = `
   }
 `;
 
-const REST_PROTO = `
-  syntax = "proto3";
-  message SensorReadingResponse {
-    int64 timestamp = 1;
-    float value     = 2;
-  }
-  message SensorReadingsResponse {
-    repeated SensorReadingResponse readings = 1;
-  }
-`;
+// ─── Cache do tipo compilado ──────────────────────────────────────────────────
 
-// ─── Cache de tipos compilados (evita reparse a cada mensagem) ────────────────
-
-let _mqttBatchType:    protobuf.Type | null = null;
-let _restResponseType: protobuf.Type | null = null;
+let _mqttBatchType: protobuf.Type | null = null;
 
 async function getMqttBatchType(): Promise<protobuf.Type> {
     if (_mqttBatchType) return _mqttBatchType;
@@ -41,18 +27,11 @@ async function getMqttBatchType(): Promise<protobuf.Type> {
     return _mqttBatchType;
 }
 
-async function getRestResponseType(): Promise<protobuf.Type> {
-    if (_restResponseType) return _restResponseType;
-    const root = protobuf.parse(REST_PROTO).root;
-    _restResponseType = root.lookupType('SensorReadingsResponse');
-    return _restResponseType;
-}
-
-// ─── Decodificadores ──────────────────────────────────────────────────────────
+// ─── Decodificador MQTT ───────────────────────────────────────────────────────
 
 /**
- * Decodifica um SensorReadingBatch vindo do MQTT (binário).
- * Retorna um array de DataPoints { time, value } com timestamp absoluto em ms.
+ * Decodifica um SensorReadingBatch vindo do MQTT (binário Protobuf).
+ * Retorna DataPoints com timestamp absoluto em ms.
  */
 export async function decodeMqttBatch(raw: Uint8Array): Promise<DataPoint[]> {
     const type = await getMqttBatchType();
@@ -67,23 +46,4 @@ export async function decodeMqttBatch(raw: Uint8Array): Promise<DataPoint[]> {
         time:  baseMs + r.deltaMs,
         value: r.value,
     }));
-}
-
-/**
- * Decodifica um SensorReadingsResponse vindo da API REST (binário).
- * Retorna um array de DataPoints { time, value } ordenado por timestamp.
- */
-export async function decodeRestHistory(raw: ArrayBuffer): Promise<DataPoint[]> {
-    const type  = await getRestResponseType();
-    const bytes = new Uint8Array(raw);
-    const msg   = type.decode(bytes) as any;
-
-    return (msg.readings ?? [])
-        .map((r: any) => ({
-            time:  typeof r.timestamp === 'object'
-                ? r.timestamp.toNumber()
-                : Number(r.timestamp),
-            value: r.value,
-        }))
-        .sort((a: DataPoint, b: DataPoint) => a.time - b.time);
 }

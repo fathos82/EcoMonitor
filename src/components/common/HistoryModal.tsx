@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Clock, Calendar, AlertCircle, Loader2 } from 'lucide-react';
-import type { DataPoint } from '../../types';
 import type { HistoryFilter, QuickRange } from '../../hooks/useHistory';
 import { useHistory } from '../../hooks/useHistory';
 import { HistoryChart } from './HistoryChart';
@@ -18,9 +17,9 @@ interface HistoryModalProps {
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
 const QUICK_RANGES: { label: string; value: QuickRange }[] = [
-    { label: '1 Hora',  value: '1H'  },
+    { label: '1 Hora',   value: '1H'  },
     { label: '24 Horas', value: '24H' },
-    { label: '7 Dias',  value: '7D'  },
+    { label: '7 Dias',   value: '7D'  },
 ];
 
 const COLOR_TEXT: Record<string, string> = {
@@ -49,23 +48,12 @@ function fromLocalInput(local: string): string {
     return new Date(local).toISOString();
 }
 
-function computeStats(data: DataPoint[]) {
-    if (data.length === 0) return { max: 0, min: 0, avg: 0, count: 0 };
-    let max = -Infinity, min = Infinity, sum = 0;
-    for (const d of data) {
-        if (d.value > max) max = d.value;
-        if (d.value < min) min = d.value;
-        sum += d.value;
-    }
-    return { max, min, avg: sum / data.length, count: data.length };
-}
-
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export const HistoryModal: React.FC<HistoryModalProps> = ({
-    measurementId, title, unit, color, onClose,
-}) => {
-    const { data, loading, error, filter, setFilter, fetch } = useHistory();
+                                                              measurementId, title, unit, color, onClose,
+                                                          }) => {
+    const { points, stats, loading, error, filter, setFilter, fetch } = useHistory();
     const [customStart, setCustomStart] = useState(() => toLocalInput(filter.startDate));
     const [customEnd,   setCustomEnd]   = useState(() => toLocalInput(filter.endDate));
     const overlayRef = useRef<HTMLDivElement>(null);
@@ -94,7 +82,6 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
         fetch(measurementId, next);
     };
 
-    const stats  = computeStats(data);
     const cText  = COLOR_TEXT[color]  ?? COLOR_TEXT.green;
     const cBg    = COLOR_BG[color]    ?? COLOR_BG.green;
 
@@ -173,18 +160,18 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                 </div>
 
                 {/* ── Stats ────────────────────────────────────────────────── */}
-                {data.length > 0 && (
+                {stats && (
                     <div className="px-5 py-3 grid grid-cols-4 gap-2 border-b border-stone-100">
                         {[
-                            { label: 'Pico',    value: stats.max },
-                            { label: 'Mínimo',  value: stats.min },
-                            { label: 'Média',   value: stats.avg },
-                            { label: 'Leituras', value: stats.count, noUnit: true },
+                            { label: 'Pico',     value: stats.max,          noUnit: false },
+                            { label: 'Mínimo',   value: stats.min,          noUnit: false },
+                            { label: 'Média',    value: stats.avg,          noUnit: false },
+                            { label: 'Leituras', value: points.length,      noUnit: true  },
                         ].map(({ label, value, noUnit }) => (
                             <div key={label} className="text-center">
                                 <p className="text-[10px] font-bold text-stone-400 uppercase">{label}</p>
                                 <p className={`text-base font-extrabold ${cText}`}>
-                                    {noUnit ? value : value.toFixed(1)}
+                                    {noUnit ? value : (value as number).toFixed(1)}
                                     {!noUnit && <span className="text-xs font-normal ml-0.5">{unit}</span>}
                                 </p>
                             </div>
@@ -205,7 +192,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                         </div>
                     )}
                     {!loading && !error && (
-                        <HistoryChart data={data} color={color} unit={unit} />
+                        <HistoryChart data={points} color={color} unit={unit} />
                     )}
                 </div>
 

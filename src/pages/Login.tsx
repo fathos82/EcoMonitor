@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { ArrowRight, Lock, Mail, Sprout, User, AlertCircle } from 'lucide-react';
+import { ArrowRight, Lock, Mail, Phone, Sprout, User, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 export const Login: React.FC = () => {
   const { login, register, loading, error } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
-  const [formData, setFormData] = useState({ name: '', email: '', password: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', phone: '' });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isSignUp) {
-      register({ name: formData.name, email: formData.email, password: formData.password });
+      register({ name: formData.name, email: formData.email, password: formData.password, phone: formData.phone || undefined });
     } else {
       login({ email: formData.email, password: formData.password });
     }
@@ -94,6 +94,22 @@ export const Login: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 />
               </div>
+
+              {isSignUp && (
+                  <div className="space-y-1.5 md:space-y-2">
+                    <label className="text-xs md:text-sm font-bold text-stone-700 flex items-center gap-2">
+                      <Phone size={14} className="md:w-4 md:h-4" /> Telefone
+                      <span className="text-stone-400 font-normal text-xs">(opcional)</span>
+                    </label>
+                    <input
+                        type="tel"
+                        className="w-full p-3 md:p-4 bg-stone-50 md:bg-white border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-sm"
+                        placeholder="(00) 00000-0000"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    />
+                  </div>
+              )}
 
               <div className="space-y-1.5 md:space-y-2">
                 <label className="text-xs md:text-sm font-bold text-stone-700 flex items-center gap-2">

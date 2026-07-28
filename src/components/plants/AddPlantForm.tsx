@@ -47,7 +47,7 @@ const MEASUREMENT_CHANNELS: {
   iconColor: string;
   accentColor: string;
 }[] = [
-  { type: 'SOIL_MOISTURE', settingKey: 'humidity', label: 'Umidade do Solo',  unit: '%',   icon: Droplets,    iconColor: 'text-emerald-400', accentColor: 'text-blue-500'   },
+  { type: 'HUMIDITY', settingKey: 'humidity', label: 'Umidade do Solo',  unit: '%',   icon: Droplets,    iconColor: 'text-emerald-400', accentColor: 'text-blue-500'   },
   { type: 'TEMPERATURE',   settingKey: 'temp',     label: 'Temperatura',       unit: '°C',  icon: Thermometer, iconColor: 'text-orange-400',  accentColor: 'text-orange-500' },
   { type: 'AIR_QUALITY',   settingKey: 'air',      label: 'Qualidade do Ar',   unit: 'AQI', icon: Wind,        iconColor: 'text-blue-400',    accentColor: 'text-teal-500'   },
   { type: 'MOCK',   settingKey: 'mock',      label: 'Sensor Mock',   unit: '°C', icon: Wind,        iconColor: 'text-blue-400',    accentColor: 'text-teal-500'   },
@@ -58,15 +58,22 @@ const MEASUREMENT_CHANNELS: {
 export const AddPlantForm: React.FC<AddPlantFormProps> = ({
                                                             onSave, onCancel, initialData, availableHardware, loading = false, error = null,
                                                           }) => {
-  const [formData, setFormData] = useState<Partial<Plant>>(() =>
-          initialData ?? {
-            name: '', species: '', location: '', image: '',
-            hardwareId: 0,
-            sensorsMapping:      { soil: null, env: null, light: null },
-            measurementsMapping: {},
-            settings: DEFAULT_SETTINGS,
-          }
-  );
+  const [formData, setFormData] = useState<Partial<Plant>>(() => {
+    if (!initialData) {
+      return {
+        name: '', species: '', location: '', image: '',
+        hardwareId: 0,
+        sensorsMapping:      { soil: null, env: null, light: null },
+        measurementsMapping: {},
+        settings: DEFAULT_SETTINGS,
+      };
+    }
+    // Merge garante que chaves novas (ex: mock) sempre existam
+    return {
+      ...initialData,
+      settings: { ...DEFAULT_SETTINGS, ...initialData.settings },
+    };
+  });
 
   // Quais medidas o usuário quer monitorar (true = ativa)
   const [activeMap, setActiveMap] = useState<Partial<Record<MeasurementType, boolean>>>(
@@ -82,13 +89,21 @@ export const AddPlantForm: React.FC<AddPlantFormProps> = ({
   );
 
   // Sensor escolhido por medida: { SOIL_MOISTURE: sensorId | null, ... }
-  const [sensorSelection, setSensorSelection] = useState<Partial<Record<MeasurementType, number | null>>>(
-      () => {
-        if (initialData?.measurementsMapping) return { ...initialData.measurementsMapping };
-        return {};
-      }
-  );
+  const [sensorSelection, setSensorSelection] =
+      useState<Partial<Record<MeasurementType, number | null>>>(() => {
+        if (initialData?.measurementsMapping) {
+          const mapped: Partial<Record<MeasurementType, number | null>> = {};
 
+          for (const key in initialData.measurementsMapping) {
+            const entry = initialData.measurementsMapping[key as MeasurementType];
+            mapped[key as MeasurementType] = entry?.measurementId ?? null; // 👈 aqui resolve
+          }
+
+          return mapped;
+        }
+
+        return {};
+      });
   const selectedHardware = availableHardware.find((h) => h.id === formData.hardwareId);
 
   // Busca sensores do device selecionado (query desabilitada se hardwareId === 0)
@@ -320,7 +335,7 @@ export const AddPlantForm: React.FC<AddPlantFormProps> = ({
                                           <option value="">Selecione o sensor…</option>
                                           {compatible.map((s) => (
                                               <option key={s.id} value={s.id}>
-                                                {s.name} — {s.model}
+                                                {s.alias} — {s.model}
                                               </option>
                                           ))}
                                         </select>

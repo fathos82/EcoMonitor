@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { Activity, LayoutGrid, LogOut, Settings, Sprout } from 'lucide-react';
 import { useAppStore } from '../stores/AppContext';
 import { useAuth } from '../hooks/useAuth';
+import { Cpu } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
   const user = useAppStore((state) => state.user);
@@ -11,7 +12,7 @@ export const Sidebar: React.FC = () => {
   const navItems = [
     { to: '/', icon: LayoutGrid, label: 'Meus Cultivos' },
     { to: '/reports', icon: Activity, label: 'Relatórios' },
-    { to: '/settings', icon: Settings, label: 'Sensores Pi' },
+    { to: '/settings', icon: Cpu, label: 'Hardware' },
   ];
 
   // Inicial do avatar: usa name, ou email, ou 'U' como fallback seguro

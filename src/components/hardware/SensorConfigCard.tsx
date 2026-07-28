@@ -67,7 +67,7 @@ export const SensorConfigCard: React.FC<SensorConfigCardProps> = ({ sensor, onCh
                 <input
                   type="text"
                   value={sensor.name}
-                  onChange={(e) => handleChange('name', e.target.value)}
+                  onChange={(e) => handleChange('alias', e.target.value)}
                   className="w-full pl-9 p-2 bg-stone-50 border border-stone-200 rounded-lg text-sm focus:border-emerald-500 outline-none"
                   placeholder="Ex: Sensor Umidade"
                 />

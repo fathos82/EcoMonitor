@@ -34,6 +34,26 @@ export interface Sensor {
   parameters: Record<string, string>;
 }
 
+/** Entrada de erro vinda de GET /sensors/{id}/errors/ */
+export interface SensorErrorEntry {
+  message: string;
+  sensorId: number;
+  dateTime: string;
+}
+
+/** Envelope de paginação padrão do Spring Boot (Page<T>) */
+export interface SpringPage<T> {
+  content: T[];
+  empty: boolean;
+  first: boolean;
+  last: boolean;
+  number: number;
+  numberOfElements: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
 export interface Hardware {
   id: number;
   name: string;

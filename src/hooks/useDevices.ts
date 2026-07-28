@@ -13,7 +13,9 @@ export function useDevices() {
     const query = useQuery({
         queryKey: DEVICES_KEY,
         queryFn: deviceService.getAll,
-        staleTime: 30_000,
+        staleTime: 10_000,
+        refetchInterval: 3_000,        // polling a cada 10s
+        refetchIntervalInBackground: false, // pausa quando aba está em background
     });
 
     // Mantém o Zustand sincronizado

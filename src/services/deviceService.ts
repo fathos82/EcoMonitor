@@ -11,6 +11,8 @@ export interface ApiDevice {
     deviceType: string;
     firstSeenAt: string;
     lastSeenAt: string;
+    // TODO: backend ainda não expõe um campo de erro do device (ex: hasError / lastError).
+    // Quando existir, mapear abaixo em toHardware() para que status possa virar 'error'.
 }
 
 export interface ClaimDeviceRequest {

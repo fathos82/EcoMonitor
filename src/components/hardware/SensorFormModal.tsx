@@ -20,7 +20,7 @@ type Step = 'pick-template' | 'configure-params';
 
 interface AddSensorModalProps {
     deviceId: number;
-    onSave: (templateId: number, parameters: Record<string, string>) => Promise<void>;
+    onSave: (templateId: number, parameters: Record<string, string>, alias?: string) => Promise<void>;
     onCancel: () => void;
     loading?: boolean;
     error?: string | null;
@@ -38,7 +38,7 @@ interface EditSensorModalProps {
 
 const capabilityColors: Record<string, string> = {
     TEMPERATURE:   'bg-orange-100 text-orange-700',
-    SOIL_MOISTURE: 'bg-blue-100 text-blue-700',
+    // SOIL_MOISTURE: 'bg-blue-100 text-blue-700',
     AIR_QUALITY:   'bg-emerald-100 text-emerald-700',
     DISTANCE:      'bg-purple-100 text-purple-700',
     HUMIDITY:      'bg-sky-100 text-sky-700',
@@ -56,10 +56,10 @@ function capBadge(cap: string) {
 }
 
 function ParametersForm({
-    fields,
-    values,
-    onChange,
-}: {
+                            fields,
+                            values,
+                            onChange,
+                        }: {
     fields: Record<string, string>;
     values: Record<string, string>;
     onChange: (key: string, val: string) => void;
@@ -99,19 +99,21 @@ function ParametersForm({
 // ─── Modal: Adicionar Sensor (2 etapas) ───────────────────────────────────────
 
 export const AddSensorModal: React.FC<AddSensorModalProps> = ({
-    onSave, onCancel, loading = false, error = null,
-}) => {
+                                                                  onSave, onCancel, loading = false, error = null,
+                                                              }) => {
     const { data: templates = [], isLoading: loadingTemplates, error: templatesError } =
         useSensorTemplates();
 
     const [step, setStep]               = useState<Step>('pick-template');
     const [selected, setSelected]       = useState<SensorTemplate | null>(null);
     const [params, setParams]           = useState<Record<string, string>>({});
+    const [alias, setAlias]             = useState('');
 
     // Ao selecionar template, pre-popula os parâmetros com os defaults
     const handlePickTemplate = (t: SensorTemplate) => {
         setSelected(t);
         setParams({ ...t.defaultParameters });
+        setAlias('');
         setStep('configure-params');
     };
 
@@ -122,7 +124,7 @@ export const AddSensorModal: React.FC<AddSensorModalProps> = ({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selected) return;
-        await onSave(selected.id, params);
+        await onSave(selected.id, params, alias.trim() || undefined);
     };
 
     return (
@@ -210,6 +212,25 @@ export const AddSensorModal: React.FC<AddSensorModalProps> = ({
                                     </div>
                                 </div>
 
+                                {/* Alias */}
+                                <div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+                                            Alias <span className="font-normal text-stone-300 normal-case">(opcional)</span>
+                                        </span>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={alias}
+                                        onChange={e => setAlias(e.target.value)}
+                                        placeholder={`Ex: Solo Vaso 1, Temp Estufa…`}
+                                        className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                                    />
+                                    <p className="text-[10px] text-stone-400 mt-1">
+                                        Nome amigável para identificar este sensor na seleção de plantas.
+                                    </p>
+                                </div>
+
                                 {/* Campos de parâmetros */}
                                 <div>
                                     <div className="flex items-center gap-2 mb-3">
@@ -246,8 +267,8 @@ export const AddSensorModal: React.FC<AddSensorModalProps> = ({
 // ─── Modal: Editar Sensor (só parâmetros) ────────────────────────────────────
 
 export const EditSensorModal: React.FC<EditSensorModalProps> = ({
-    sensor, onSave, onCancel, loading = false, error = null,
-}) => {
+                                                                    sensor, onSave, onCancel, loading = false, error = null,
+                                                                }) => {
     const [params, setParams] = useState<Record<string, string>>({ ...sensor.parameters });
 
     useEffect(() => {
@@ -310,8 +331,8 @@ function Overlay({ children, onClose }: { children: React.ReactNode; onClose: ()
 }
 
 function ModalShell({
-    title, subtitle, onClose, onBack, children,
-}: {
+                        title, subtitle, onClose, onBack, children,
+                    }: {
     title: string;
     subtitle?: string;
     onClose: () => void;
@@ -353,8 +374,8 @@ function ModalShell({
 }
 
 function ModalFooter({
-    onCancel, loading, submitLabel, disabled = false,
-}: {
+                         onCancel, loading, submitLabel, disabled = false,
+                     }: {
     onCancel: () => void;
     loading: boolean;
     submitLabel: string;

@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { ApiSensor, Sensor, SensorTemplate } from '../types';
+import type { ApiSensor, Sensor, SensorTemplate, SensorErrorEntry, SpringPage } from '../types';
 
 // ─── Payloads ─────────────────────────────────────────────────────────────────
 
@@ -62,5 +62,11 @@ export const sensorService = {
     /** DELETE /sensors/{id}/ */
     async delete(sensorId: number): Promise<void> {
         await api.delete(`/sensors/${sensorId}/`);
+    },
+
+    /** GET /sensors/{id}/errors/ — histórico paginado de erros reportados pelo device */
+    async getErrors(sensorId: number): Promise<SensorErrorEntry[]> {
+        const res = await api.get<SpringPage<SensorErrorEntry>>(`/sensors/${sensorId}/errors/`);
+        return res.data.content;
     },
 };
