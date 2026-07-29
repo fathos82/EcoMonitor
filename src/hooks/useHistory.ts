@@ -14,7 +14,7 @@ export interface HistoryFilter {
 
 export interface UseHistoryResult {
     points:    DataPoint[];
-    stats:     { min: number; max: number; avg: number } | null;
+    stats: { min: number | null; max: number | null; avg: number | null } | null;
     loading:   boolean;
     error:     string | null;
     filter:    HistoryFilter;

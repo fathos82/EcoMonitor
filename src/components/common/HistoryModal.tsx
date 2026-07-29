@@ -171,7 +171,7 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                             <div key={label} className="text-center">
                                 <p className="text-[10px] font-bold text-stone-400 uppercase">{label}</p>
                                 <p className={`text-base font-extrabold ${cText}`}>
-                                    {noUnit ? value : (value as number).toFixed(1)}
+                                    {noUnit ? value : (value != null ? (value as number).toFixed(1) : '—')}
                                     {!noUnit && <span className="text-xs font-normal ml-0.5">{unit}</span>}
                                 </p>
                             </div>
