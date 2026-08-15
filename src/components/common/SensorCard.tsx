@@ -107,7 +107,8 @@ const LiveChart: React.FC<ChartProps> = ({
                 tickLine={false}
 
                 tickFormatter={(v) => Number(v.toFixed(1)).toString()}
-                domain={['auto', 'auto']}
+                domain={[15, 30]}
+
                 padding={{ top: 8, bottom: 4 }}
             />
             <Tooltip
@@ -289,14 +290,14 @@ export const SensorCard: React.FC<SensorCardProps> = ({
           {/* ── Gráfico compacto (últimos 60 pts) ───────────────── */}
           <div
               className="h-36 md:h-48 w-full mt-1 md:mt-3 px-2 md:px-4 pb-2"
-              style={{ transition: 'opacity 150ms ease-out', transform: 'translateZ(0)', willChange: 'opacity' }}
+              style={{ minHeight: '9rem', transition: 'opacity 150ms ease-out', transform: 'translateZ(0)', willChange: 'opacity' }}
           >
             {isEmpty ? (
                 <div className="h-full flex items-center justify-center">
                   <p className="text-xs text-stone-300 italic">Aguardando dados…</p>
                 </div>
             ) : (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" debounce={1}>
                   <AreaChart data={cardData} margin={{ top: 8, right: 0, left: -25, bottom: 0 }}>
                     <defs>
                       <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">

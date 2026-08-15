@@ -23,16 +23,16 @@ export interface MeasurementHistoryPoint {
 }
 
 export interface MeasurementHistoryResponse {
-    min:   number;
-    max:   number;
-    avg:   number;
+    min:   number | null;
+    max:   number | null;
+    avg:   number | null;
     value: MeasurementHistoryPoint[];
 }
 
 export interface HistoryResult {
-    min:    number;
-    max:    number;
-    avg:    number;
+    min:    number | null;
+    max:    number | null;
+    avg:    number | null;
     points: DataPoint[];
 }
 

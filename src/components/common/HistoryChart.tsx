@@ -28,11 +28,15 @@ function fmtDate(ts: number) {
         hour: '2-digit', minute: '2-digit',
     });
 }
-
 export const HistoryChart: React.FC<HistoryChartProps> = ({ data, color, unit }) => {
     const c = COLOR_MAP[color] ?? COLOR_MAP.green;
 
-    if (data.length === 0) {
+    // Ignora os primeiros 3 minutos de dados (fase de "aquecimento" do sensor)
+    const stableData = data.length > 0
+        ? data.filter((d) => d.time >= data[0].time + 3 * 60 * 1000)
+        : data;
+
+    if (stableData.length === 0) {
         return (
             <div className="flex-1 flex items-center justify-center text-stone-400 text-sm">
                 Nenhum dado no período selecionado
@@ -42,7 +46,7 @@ export const HistoryChart: React.FC<HistoryChartProps> = ({ data, color, unit })
 
     return (
         <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={data} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
+            <AreaChart data={stableData} margin={{ top: 10, right: 16, left: -10, bottom: 0 }}>
                 <defs>
                     <linearGradient id="histGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%"  stopColor={c.fill} stopOpacity={0.25} />
@@ -62,7 +66,7 @@ export const HistoryChart: React.FC<HistoryChartProps> = ({ data, color, unit })
                     minTickGap={60}
                 />
                 <YAxis
-                    domain={['auto', 'auto']} /* ✨ Adicionado: O gráfico agora ajusta a escala Y automaticamente */
+                    domain={[15, 30]} /* ✨ Adicionado: O gráfico agora ajusta a escala Y automaticamente */
                     tick={{ fill: '#78716c', fontSize: 11 }}
                     axisLine={false}
                     tickLine={false}

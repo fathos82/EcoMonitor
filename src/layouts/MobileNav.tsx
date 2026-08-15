@@ -21,10 +21,14 @@ export const MobileNav: React.FC = () => {
             }`
           }
         >
-          <Icon size={24} strokeWidth={({ isActive }) => (isActive ? 2.5 : 2)} />
-          <span className={`text-[10px] font-medium ${({ isActive }) => (isActive ? 'font-bold' : '')}`}>
-            {label}
-          </span>
+          {({ isActive }) => (
+            <>
+              <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
+              <span className={`text-[10px] font-medium ${isActive ? 'font-bold' : ''}`}>
+                {label}
+              </span>
+            </>
+          )}
         </NavLink>
       ))}
     </div>

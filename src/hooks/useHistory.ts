@@ -14,7 +14,7 @@ export interface HistoryFilter {
 
 export interface UseHistoryResult {
     points:    DataPoint[];
-    stats: { min: number | null; max: number | null; avg: number | null } | null;
+    stats:     { min: number | null; max: number | null; avg: number | null } | null;
     loading:   boolean;
     error:     string | null;
     filter:    HistoryFilter;
@@ -45,7 +45,7 @@ function defaultFilter(): HistoryFilter {
 
 export function useHistory(): UseHistoryResult {
     const [points,  setPoints]  = useState<DataPoint[]>([]);
-    const [stats,   setStats]   = useState<{ min: number; max: number; avg: number } | null>(null);
+    const [stats,   setStats]   = useState<{ min: number | null; max: number | null; avg: number | null } | null>(null);
     const [loading, setLoading] = useState(false);
     const [error,   setError]   = useState<string | null>(null);
     const [filter,  setFilter]  = useState<HistoryFilter>(defaultFilter);
