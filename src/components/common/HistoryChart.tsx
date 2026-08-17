@@ -28,13 +28,30 @@ function fmtDate(ts: number) {
         hour: '2-digit', minute: '2-digit',
     });
 }
+
+// Descarta os primeiros N ms de dados (fase de "aquecimento" do sensor),
+// mas nunca zera o gráfico inteiro: se o corte não deixar nada, usa os dados crus.
+const WARMUP_MS = 3 * 60 * 1000;
+
+function getStableData(data: DataPoint[]): DataPoint[] {
+    if (data.length === 0) return data;
+
+    // Garante ordem cronológica: data[0] precisa ser o ponto mais antigo
+    // para o corte de aquecimento fazer sentido.
+    const sorted = [...data].sort((a, b) => a.time - b.time);
+
+    const cutoff = sorted[0].time + WARMUP_MS;
+    const filtered = sorted.filter((d) => d.time >= cutoff);
+
+    // Se o corte de aquecimento removeu tudo (range curto, poucos registros),
+    // prefere mostrar os dados disponíveis a mostrar um gráfico vazio.
+    return filtered.length > 0 ? filtered : sorted;
+}
+
 export const HistoryChart: React.FC<HistoryChartProps> = ({ data, color, unit }) => {
     const c = COLOR_MAP[color] ?? COLOR_MAP.green;
 
-    // Ignora os primeiros 3 minutos de dados (fase de "aquecimento" do sensor)
-    const stableData = data.length > 0
-        ? data.filter((d) => d.time >= data[0].time + 3 * 60 * 1000)
-        : data;
+    const stableData = getStableData(data);
 
     if (stableData.length === 0) {
         return (
@@ -66,7 +83,7 @@ export const HistoryChart: React.FC<HistoryChartProps> = ({ data, color, unit })
                     minTickGap={60}
                 />
                 <YAxis
-                    domain={[15, 30]} /* ✨ Adicionado: O gráfico agora ajusta a escala Y automaticamente */
+                    domain={[15, 30]}
                     tick={{ fill: '#78716c', fontSize: 11 }}
                     axisLine={false}
                     tickLine={false}
